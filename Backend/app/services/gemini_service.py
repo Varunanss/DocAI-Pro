@@ -1,6 +1,7 @@
 import google.generativeai as genai
 import time
 import re
+import os
 import json
 import tempfile
 from reportlab.pdfgen import canvas
@@ -9,13 +10,18 @@ from reportlab.lib.pagesizes import letter
 # ============================================================
 # 🔐 10-KEY ROTATION SYSTEM (Add your keys here)
 # ============================================================
-API_KEYS = [
-    "AIzaSyCbALDTNQisu-Nh8Nwc9Sa85o-CFFImUEI", # Key 1
-    "AIzaSyAzqKL9bZdWVFmQtppl7OHDlCg9EAEZnSI",
-    "AIzaSyDadIabn0tkLBN2Hfhh1Ql_th7Lnlvr_bI",
-    "AIzaSyAGuqAxeBS3rQ6fEXzMnv4cf4OI21IIjwE",
-    "AIzaSyCYBUqf4xMk_eC71h1EYT5U1GopYmgulHI"
-]
+KEYS_STRING = os.getenv("GEMINI_API_KEYS")
+
+if not KEYS_STRING:
+    # Fallback to a single key if the list is missing (prevents crash)
+    single_key = os.getenv("GEMINI_API_KEY")
+    if single_key:
+        API_KEYS = [single_key]
+    else:
+        raise ValueError("❌ GEMINI_API_KEYS is missing in .env file! Please add keys separated by commas.")
+else:
+    # Create the list by splitting commas and stripping spaces
+    API_KEYS = [k.strip() for k in KEYS_STRING.split(",") if k.strip()]
 
 current_key_index = 0
 

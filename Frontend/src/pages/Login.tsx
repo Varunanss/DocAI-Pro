@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Loader2, Eye, EyeOff } from "lucide-react";
+import { FileText, Loader2, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -25,7 +25,7 @@ const Login = () => {
     if (!email || !email.includes('@')) {
       toast({
         title: "Email Required",
-        description: "Please enter your registered email address first.",
+        description: "Please enter your email to reset the password.",
         variant: "destructive",
       });
       return;
@@ -39,6 +39,7 @@ const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // --- VALIDATION ---
     if (!email || !password) {
       toast({ title: "Validation Error", description: "Please fill in all fields", variant: "destructive" });
       return;
@@ -48,7 +49,7 @@ const Login = () => {
       return;
     }
     if (password.length < 6) {
-      toast({ title: "Invalid Password", description: "Password must be at least 6 characters", variant: "destructive" });
+      toast({ title: "Weak Password", description: "Password must be at least 6 characters", variant: "destructive" });
       return;
     }
 
@@ -65,30 +66,66 @@ const Login = () => {
 
       const data = await response.json();
 
-      if (!response.ok) throw new Error(data.message || 'Authentication failed');
+      // --- 🧠 SMART ERROR HANDLING ---
+      if (!response.ok) {
+        // CASE 1: User tries to Login, but account doesn't exist (404)
+        if (response.status === 404 && !isRegisterMode) {
+            toast({ 
+                title: "Account Not Found", 
+                description: "You don't have an account yet. Please Sign Up.", 
+                variant: "destructive" 
+            });
+            setActiveTab("register"); // 👈 Auto-switch to Register tab
+            throw new Error("Switching to register..."); // Stop execution
+        }
 
+        // CASE 2: Wrong Password (401)
+        if (response.status === 401) {
+            toast({ 
+                title: "Incorrect Password", 
+                description: "The password you entered is incorrect. Try again.", 
+                variant: "destructive" 
+            });
+            throw new Error("Wrong password");
+        }
+
+        // CASE 3: User tries to Register, but email already exists (400)
+        if (response.status === 400 && isRegisterMode) {
+            toast({ 
+                title: "Account Already Exists", 
+                description: "This email is already registered. Please Log In.", 
+                variant: "default" // Not destructive, just informative
+            });
+            setActiveTab("login"); // 👈 Auto-switch to Login tab
+            throw new Error("Switching to login...");
+        }
+
+        // General Error (Server error, etc.)
+        throw new Error(data.detail || 'Authentication failed');
+      }
+
+      // --- SUCCESS ---
       if (data.access_token) {
         localStorage.setItem('auth_token', data.access_token);
         localStorage.setItem('user_email', email);
+        
+        // 🧹 Clear old analysis ID so Dashboard is fresh
+        localStorage.removeItem('current_processing_id');
 
         toast({
-          title: isRegisterMode ? "Account created!" : "Welcome back!",
-          description: isRegisterMode ? "Your account has been created successfully" : "You've been logged in successfully",
+          title: isRegisterMode ? "Welcome to DocAI Pro!" : "Welcome back!",
+          description: isRegisterMode ? "Your account has been created successfully." : "Login successful.",
+          className: "bg-green-50 border-green-200 text-green-900",
         });
 
-        // Redirect to the new HOME Dashboard
         navigate("/upload");
-      } else {
-        throw new Error('No access token received');
       }
 
-    } catch (error) {
-      console.error('Authentication error:', error);
-      toast({
-        title: isRegisterMode ? "Registration failed" : "Login failed",
-        description: error instanceof Error ? error.message : 'Authentication failed',
-        variant: "destructive",
-      });
+    } catch (error: any) {
+      // Don't log expected flow interruptions (like tab switching)
+      if (error.message !== "Switching to register..." && error.message !== "Switching to login..." && error.message !== "Wrong password") {
+          console.error('Auth error:', error);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -102,6 +139,7 @@ const Login = () => {
       </div>
       
       <Card className="w-full max-w-md animate-slide-up relative overflow-hidden shadow-2xl border-primary/10">
+        {/* Tab Switcher */}
         <div className="flex w-full border-b bg-muted/20">
             <button
                 type="button"
@@ -133,12 +171,12 @@ const Login = () => {
           </div>
           <div>
             <CardTitle className="text-2xl font-bold tracking-tight">
-              {isRegisterMode ? "Create your account" : "Welcome back"}
+              {isRegisterMode ? "Create Account" : "Welcome Back"}
             </CardTitle>
             <CardDescription className="mt-2">
               {isRegisterMode 
-                ? "Join DocAI Pro to start analyzing documents" 
-                : "Enter your credentials to access your dashboard"}
+                ? "Sign up to start analyzing documents instantly." 
+                : "Enter your credentials to continue."}
             </CardDescription>
           </div>
         </CardHeader>
@@ -155,7 +193,6 @@ const Login = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 className="h-11"
                 disabled={isLoading}
-                autoComplete="email"
                 required
               />
             </div>
@@ -183,7 +220,6 @@ const Login = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-11 pr-10"
                     disabled={isLoading}
-                    autoComplete={isRegisterMode ? "new-password" : "current-password"}
                     required
                   />
                   <button
@@ -196,9 +232,10 @@ const Login = () => {
                   </button>
               </div>
               {isRegisterMode && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                   ℹ️ Must be at least 6 characters long
-                </p>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-slate-50 p-2 rounded">
+                   <AlertCircle className="w-3 h-3" />
+                   <span>Password must be at least 6 characters</span>
+                </div>
               )}
             </div>
             
@@ -212,17 +249,17 @@ const Login = () => {
               {isLoading ? (
                 <>
                   <Loader2 className="animate-spin mr-2" />
-                  {isRegisterMode ? "Creating Account..." : "Signing In..."}
+                  Processing...
                 </>
               ) : (
-                isRegisterMode ? "Sign Up" : "Log In"
+                isRegisterMode ? "Create Account" : "Sign In"
               )}
             </Button>
           </form>
           
           <div className="mt-8 text-center text-xs text-muted-foreground">
             By continuing, you agree to our{" "}
-            <span className="underline cursor-pointer hover:text-primary">Terms</span> and{" "}
+            <span className="underline cursor-pointer hover:text-primary">Terms</span> &{" "}
             <span className="underline cursor-pointer hover:text-primary">Privacy Policy</span>.
           </div>
         </CardContent>

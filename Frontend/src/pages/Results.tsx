@@ -21,6 +21,16 @@ const Results = () => {
       try {
         const processingId = localStorage.getItem('current_processing_id');
         const token = localStorage.getItem('auth_token');
+        if (!token) {
+            navigate("/login");
+            return;
+        }
+
+        // 🧠 LOGIC CHECK 2: Logged in, but no file uploaded? -> Go to History
+        if (!processingId) {
+            navigate("/history");
+            return;
+        }
         
         if (!processingId || !token) {
             navigate("/upload");

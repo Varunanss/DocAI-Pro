@@ -64,9 +64,9 @@ const Processing = () => {
   };
 
   const steps = [
-    { id: "identifying", label: "Opening Document" },
-    { id: "summarizing", label: "Reading the Document" },
-    { id: "auditing", label: "Summarizing the Document" },
+    { id: "identifying", label: "Identification & Extraction" },
+    { id: "summarizing", label: "AI Summarizing & Analyzing" },
+    { id: "auditing", label: "Final Validating & Report Generation" },
   ];
 
   return (

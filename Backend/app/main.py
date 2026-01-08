@@ -30,14 +30,27 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # ==========================
 # 🔐 AUTH
 # ==========================
-@app.post("/api/", response_model=schemas.Token)
+# 👇 FIXED: Changed URL from "/api/" to "/api/auth/register"
+# 👇 REPLACE THE OLD REGISTER FUNCTION WITH THIS
+@app.post("/api/auth/register", response_model=schemas.Token)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    # 1. Check if email already exists
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if db_user: raise HTTPException(400, "Email registered")
-    new_user = models.User(email=user.email, hashed_password=jwt_handler.get_password_hash(user.password))
+    if db_user:
+        # This triggers the "Account Already Exists" toast on Frontend
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # 2. Hash Password & Create User
+    hashed_password = jwt_handler.get_password_hash(user.password)
+    new_user = models.User(email=user.email, hashed_password=hashed_password)
     db.add(new_user)
     db.commit()
-    return {"access_token": jwt_handler.create_access_token({"sub": new_user.email}), "token_type": "bearer"}
+    db.refresh(new_user)
+    
+    # 3. 🔥 AUTO-LOGIN: Generate Token Immediately
+    # This allows the frontend to log them in right after signing up
+    access_token = jwt_handler.create_access_token(data={"sub": new_user.email})
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @app.post("/api/auth/login", response_model=schemas.Token)
 def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
@@ -126,7 +139,7 @@ async def upload_file(
     return {"processing_id": new_analysis.id, "message": "Upload successful"}
 
 # ==========================
-# 📊 RESULTS & HISTORY (Renamed Route)
+# 📊 RESULTS & HISTORY
 # ==========================
 @app.get("/api/processing/{analysis_id}", response_model=schemas.ProcessingResult)
 def get_results(analysis_id: int, db: Session = Depends(get_db), u=Depends(jwt_handler.get_current_user)):
@@ -151,7 +164,6 @@ def get_results(analysis_id: int, db: Session = Depends(get_db), u=Depends(jwt_h
         "errorMessage": analysis.error_message
     }
 
-# 👇 RENAMED TO MATCH FRONTEND ROUTE
 @app.get("/api/history", response_model=list[schemas.ProcessingResult])
 def get_history(db: Session = Depends(get_db), user=Depends(jwt_handler.get_current_user)):
     history = (
